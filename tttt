@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPA Rendimientos</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CONFIGURACIÓN — Cambia estos valores según tu sitio    ║
+// ╚══════════════════════════════════════════════════════════╝
+const CFG = {
+  // ← ← ← CAMBIA AQUÍ tu URL del sitio SharePoint ← ← ←
+  SP_SITE: 'https://intecapedu.sharepoint.com/sites/TOMATE',
+
+  // ← ← ← CAMBIA AQUÍ el nombre exacto de tu lista ← ← ←
+  SP_LIST: 'SPARENDIMIENTOS',
+
+  // Excel de respaldo (si SharePoint no conecta)
+  EXCEL_FILE: 'datos_personal.xlsx',
+
+  // Recarga automática (minutos)
+  AUTO_REFRESH_MIN: 3,
+
+  // Proyecciones
+  META_PLOTS: 5000,
+  HORAS_JORNADA: 8,
+  DIAS_SEMANA: 6,
+};
+</script>
+<style>
+:root{--g:#88BC30;--gd:rgba(136,188,48,.12);--b:#38B4E8;--bd:rgba(56,180,232,.12);
+--n:#0C384C;--nl:#164A60;--bg:#F4F7FA;--bgc:#FFF;--bdr:#E2E8F0;
+--am:#F59E0B;--amd:rgba(245,158,11,.12);--rd:#EF4444;--rdd:rgba(239,68,68,.12);--pu:#8B5CF6;
+--t1:#0F172A;--t2:#475569;--t3:#94A3B8;--f:'Plus Jakarta Sans',sans-serif;
+--r:12px;--rs:8px;--sh:0 1px 3px rgba(0,0,0,.06);--shl:0 4px 20px rgba(0,0,0,.08);}
+*{margin:0;padding:0;box-sizing:border-box;}body{background:var(--bg);color:var(--t1);font-family:var(--f);min-height:100vh;}::selection{background:var(--g);color:#fff;}
+#loader{position:fixed;inset:0;z-index:9999;background:var(--n);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .5s;}
+#loader.hide{opacity:0;pointer-events:none;}
+.ldb{display:flex;align-items:center;gap:12px;margin-bottom:6px;}.ldm{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--g),#6BA024);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;}
+.ldn{color:#fff;font-size:22px;font-weight:800;}.ldn span{color:var(--g);}
+.lds{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ldMsg{color:rgba(255,255,255,.6);font-size:12px;text-align:center;max-width:420px;line-height:1.7;}
+#ldLog{color:rgba(255,255,255,.3);font-size:10px;text-align:center;max-width:420px;white-space:pre-line;}
+.ldf{border:2px dashed rgba(255,255,255,.2);border-radius:14px;padding:22px;cursor:pointer;transition:all .3s;text-align:center;margin-top:10px;}
+.ldf:hover{border-color:var(--g);background:rgba(136,188,48,.1);}.ldf input{display:none;}
+
+.lay{display:flex;min-height:100vh;}
+.sb{width:210px;background:var(--n);color:#fff;position:fixed;top:0;left:0;bottom:0;z-index:100;display:flex;flex-direction:column;}
+.sbb{padding:14px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sbm{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--g),#6BA024);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+.sbn{font-size:13px;font-weight:800;}.sbn span{color:var(--g);}
+.sbnv{flex:1;padding:6px;overflow-y:auto;}
+.sbsc{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.25);font-weight:700;padding:8px 8px 3px;}
+.sbi{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500;color:rgba(255,255,255,.5);transition:all .15s;margin-bottom:1px;}
+.sbi:hover{background:rgba(255,255,255,.07);color:#fff;}.sbi.on{background:var(--g);color:#fff;font-weight:700;}
+.sbi .ic{font-size:12px;width:16px;text-align:center;}
+.sbf{padding:8px 10px;border-top:1px solid rgba(255,255,255,.08);font-size:8px;color:rgba(255,255,255,.2);}
+.sbd{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:4px;}
+.sbd.ok{background:var(--g);animation:pu 2s infinite;}.sbd.err{background:var(--rd);}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.3}}
+
+.mn{margin-left:210px;flex:1;min-height:100vh;}
+.tb{background:var(--bgc);border-bottom:1px solid var(--bdr);padding:8px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.tbl h1{font-size:13px;font-weight:700;color:var(--n);}.tbl p{font-size:9px;color:var(--t3);}
+.tbr{display:flex;align-items:center;gap:5px;}
+.btn{padding:4px 10px;border-radius:6px;font-family:var(--f);font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--bdr);background:var(--bgc);color:var(--t1);transition:all .15s;display:inline-flex;align-items:center;gap:4px;}
+.btn:hover{border-color:var(--g);background:var(--gd);}.btng{background:var(--g);color:#fff;border-color:var(--g);}.btng:hover{background:#7AAD28;}.btnn{background:var(--n);color:#fff;border-color:var(--n);}
+
+.flt{background:var(--bgc);border-bottom:1px solid var(--bdr);padding:6px 18px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.fp{display:flex;align-items:center;gap:3px;}.fp label{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);font-weight:700;}
+.fp select{background:var(--bg);border:1px solid var(--bdr);color:var(--t1);padding:3px 6px;border-radius:4px;font-family:var(--f);font-size:10px;}.fp select:focus{outline:none;border-color:var(--g);}
+
+.ct{padding:14px 18px;display:none;}.ct.on{display:block;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;}
+.kpi{background:var(--bgc);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;box-shadow:var(--sh);position:relative;overflow:hidden;}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kpi:nth-child(1)::after{background:var(--g);}.kpi:nth-child(2)::after{background:var(--b);}.kpi:nth-child(3)::after{background:var(--am);}.kpi:nth-child(4)::after{background:var(--pu);}.kpi:nth-child(5)::after{background:var(--rd);}
+.kpi-v{font-size:20px;font-weight:800;line-height:1;margin-bottom:1px;}.kpi-l{font-size:8px;color:var(--t2);}
+.kpi:nth-child(1) .kpi-v{color:var(--g);}.kpi:nth-child(2) .kpi-v{color:var(--b);}.kpi:nth-child(3) .kpi-v{color:var(--am);}.kpi:nth-child(4) .kpi-v{color:var(--pu);}.kpi:nth-child(5) .kpi-v{color:var(--n);}
+
+.cd{background:var(--bgc);border:1px solid var(--bdr);border-radius:10px;padding:14px;box-shadow:var(--sh);margin-bottom:10px;}
+.cdh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}.cdt{font-size:11px;font-weight:700;color:var(--n);}.cds{font-size:8px;color:var(--t3);}
+.cw{position:relative;height:220px;}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+
+table{width:100%;border-collapse:collapse;}thead th{text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);font-weight:700;padding:0 4px 6px;border-bottom:2px solid var(--bdr);}
+tbody td{padding:5px 4px;font-size:10px;border-bottom:1px solid var(--bdr);}tbody tr:hover{background:var(--bg);}
+.rb{width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:8px;}
+.r1{background:#F59E0B;color:#fff;}.r2{background:#94A3B8;color:#fff;}.r3{background:#D97706;color:#fff;}.rx{background:var(--bg);color:var(--t3);}
+.bb{width:100%;height:4px;background:var(--bg);border-radius:2px;overflow:hidden;}.bf{height:100%;border-radius:2px;}.bg{background:var(--g);}.by{background:var(--am);}.br{background:var(--rd);}
+
+.stbl{width:100%;font-size:10px;}.stbl th{background:var(--n);color:#fff;padding:5px 6px;font-size:8px;text-transform:uppercase;text-align:center;border:1px solid var(--nl);}
+.stbl th:first-child,.stbl th:nth-child(2),.stbl th:nth-child(3){text-align:left;}
+.stbl td{padding:4px 6px;text-align:center;border:1px solid var(--bdr);}.stbl td:first-child,.stbl td:nth-child(2),.stbl td:nth-child(3){text-align:left;font-weight:600;color:var(--n);}
+.stbl tr:nth-child(even){background:#F8FAFC;}.stbl tr:hover{background:var(--gd);}.stbl tfoot td{background:var(--n);color:#fff;font-weight:700;border-color:var(--nl);}
+.stbl input{width:55px;padding:2px 3px;border:1px solid var(--bdr);border-radius:3px;font-family:var(--f);font-size:10px;text-align:center;background:var(--bg);}.stbl input:focus{outline:none;border-color:var(--g);}
+
+.hmtbl{width:100%;font-size:9px;}.hmtbl th{padding:4px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--t2);background:var(--bg);border-bottom:2px solid var(--bdr);}.hmtbl th:first-child{text-align:left;}
+.hmtbl td{text-align:center;padding:3px 4px;font-weight:700;font-size:9px;}.hmtbl td:first-child{text-align:left;font-weight:600;color:var(--n);font-size:8px;}
+.hml{display:flex;align-items:center;gap:4px;margin-bottom:5px;font-size:8px;color:var(--t3);}.hmlb{height:6px;width:70px;border-radius:3px;background:linear-gradient(90deg,#FEE2E2,#FEF3C7,#D9F99D,#86EFAC,#22C55E);}
+
+/* Calculator table */
+.caltbl{width:100%;font-size:10px;border-collapse:collapse;}.caltbl th{background:var(--n);color:#fff;padding:5px 6px;font-size:8px;text-transform:uppercase;text-align:center;border:1px solid var(--nl);}
+.caltbl td{padding:4px 5px;text-align:center;border:1px solid var(--bdr);vertical-align:middle;}
+.caltbl select,.caltbl input{width:100%;padding:2px 4px;border:1px solid var(--bdr);border-radius:3px;font-family:var(--f);font-size:9px;background:var(--bg);}
+.caltbl .cg{font-weight:700;color:var(--g);}.caltbl .cr{font-weight:700;color:var(--rd);}
+.caltbl tr:nth-child(even){background:#F8FAFC;}
+
+.pcd{background:var(--bgc);border:1px solid var(--bdr);border-radius:10px;padding:14px;text-align:center;box-shadow:var(--sh);}
+.pcv{font-size:22px;font-weight:800;margin-bottom:1px;}.pcl{font-size:9px;color:var(--t2);margin-bottom:3px;}.pcp{font-size:8px;color:var(--t3);}
+
+.frm{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px;}
+.clf label{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);font-weight:700;margin-bottom:2px;}
+.clf input,.clf select{width:100%;background:var(--bg);border:1px solid var(--bdr);color:var(--t1);padding:5px 7px;border-radius:6px;font-family:var(--f);font-size:11px;}.clf input:focus,.clf select:focus{outline:none;border-color:var(--g);}
+
+@media(max-width:900px){.sb{display:none;}.mn{margin-left:0;}.kpis{grid-template-columns:repeat(2,1fr);}.g2,.g3{grid-template-columns:1fr;}.frm{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+<div id="loader">
+  <div class="ldb"><div class="ldm">S</div><div class="ldn">SPA<span>Rendimientos</span></div></div>
+  <div class="lds" id="spinEl"></div>
+  <div id="ldMsg">Conectando...</div>
+  <div id="ldLog"></div>
+  <div class="ldf" id="fbD"><div style="font-size:18px;margin-bottom:4px;">📂</div><div style="font-weight:600;font-size:11px;color:#fff;">Cargar Excel manualmente</div><input type="file" id="fbI" accept=".xlsx,.xls,.csv"></div>
+</div>
+
+<div class="lay" id="app" style="display:none;">
+<nav class="sb">
+  <div class="sbb"><div class="sbm">S</div><div class="sbn">SPA<span>Rend</span></div></div>
+  <div class="sbnv">
+    <div class="sbsc">Análisis</div>
+    <div class="sbi on" data-t="overview"><span class="ic">📊</span>Vista General</div>
+    <div class="sbi" data-t="ranking"><span class="ic">🏆</span>Ranking</div>
+    <div class="sbi" data-t="compare"><span class="ic">📈</span>Comparativo</div>
+    <div class="sbi" data-t="heatmap"><span class="ic">🗺️</span>Heatmaps</div>
+    <div class="sbi" data-t="summary"><span class="ic">📋</span>Tabla Resumen</div>
+    <div class="sbsc">Planificación</div>
+    <div class="sbi" data-t="projections"><span class="ic">🔮</span>Proyecciones</div>
+    <div class="sbi" data-t="calculator"><span class="ic">🧮</span>Calculadora</div>
+    <div class="sbsc">Datos</div>
+    <div class="sbi" data-t="adddata"><span class="ic">➕</span>Agregar Registro</div>
+  </div>
+  <div class="sbf"><div id="srcSt"></div><div id="sInfo">—</div></div>
+</nav>
+
+<div class="mn">
+  <div class="tb"><div class="tbl"><h1 id="pT">Vista General</h1><p id="pD"></p></div>
+    <div class="tbr"><button class="btn" onclick="loadData()">🔄</button><label class="btn" style="cursor:pointer;">📂 Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="if(this.files.length)readF(this.files[0])" style="display:none;"></label></div></div>
+  <div class="flt" id="fBar"></div>
+
+  <div class="ct on" id="s-overview"><div class="kpis" id="kR"></div>
+    <div class="g2"><div class="cd"><div class="cdh"><span class="cdt">Tendencia Diaria</span></div><div class="cw"><canvas id="cTr"></canvas></div></div>
+      <div class="cd"><div class="cdh"><span class="cdt">Por Actividad</span></div><div class="cw"><canvas id="cAc"></canvas></div></div></div>
+    <div class="g2"><div class="cd"><div class="cdh"><span class="cdt">Por Cultivo</span></div><div class="cw"><canvas id="cCu"></canvas></div></div>
+      <div class="cd"><div class="cdh"><span class="cdt">Por MTC (Top 12)</span></div><div class="cw"><canvas id="cMt"></canvas></div></div></div></div>
+
+  <div class="ct" id="s-ranking"><div class="g2">
+    <div class="cd"><div class="cdh"><span class="cdt">🏆 Ranking</span></div><div style="overflow-y:auto;max-height:440px;"><table><thead><tr><th style="width:24px">#</th><th>Trabajador</th><th>P/Hr</th><th>Plots</th><th>Hrs</th><th style="width:18%"></th></tr></thead><tbody id="rkB"></tbody></table></div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Top 10</span></div><div class="cw" style="height:300px;"><canvas id="cRk"></canvas></div></div></div></div>
+
+  <div class="ct" id="s-compare"><div class="g2">
+    <div class="cd"><div class="cdh"><span class="cdt">Por Set</span></div><div class="cw"><canvas id="cSe"></canvas></div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Por MTC</span></div><div class="cw"><canvas id="cMC"></canvas></div></div></div>
+    <div class="g2"><div class="cd"><div class="cdh"><span class="cdt">Horas por Trabajador</span></div><div class="cw" style="height:250px;"><canvas id="cHr"></canvas></div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Plots por Cultivo</span></div><div class="cw"><canvas id="cCC"></canvas></div></div></div></div>
+
+  <div class="ct" id="s-heatmap">
+    <div class="cd"><div class="cdh"><span class="cdt">Trabajador × Actividad</span></div><div class="hml"><span>Bajo</span><div class="hmlb"></div><span>Alto</span></div><div style="overflow-x:auto;" id="hWA"></div></div>
+    <div class="g2"><div class="cd"><div class="cdh"><span class="cdt">MTC × Actividad</span></div><div class="hml"><span>Bajo</span><div class="hmlb"></div><span>Alto</span></div><div style="overflow-x:auto;" id="hMA"></div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Cultivo × Set</span></div><div class="hml"><span>Bajo</span><div class="hmlb"></div><span>Alto</span></div><div style="overflow-x:auto;" id="hCS"></div></div></div></div>
+
+  <div class="ct" id="s-summary"><div class="cd" id="sumCard"><div class="cdh"><span class="cdt">📋 Tabla Resumen</span><button class="btng btn" onclick="exSec('sumCard')">📄 PDF</button></div>
+    <p style="font-size:8px;color:var(--t2);margin-bottom:6px;">Edita <b>Plantas Est.</b> y <b>Días Des.</b> para recalcular. Cambia Hrs/Semana arriba.</p>
+    <div style="overflow-x:auto;" id="sTbl"></div></div></div>
+
+  <div class="ct" id="s-projections"><div class="g3" id="pCards"></div>
+    <div class="cd" style="margin-top:8px;"><div class="cdh"><span class="cdt">Proyección de Avance</span></div><div class="cw" style="height:250px;"><canvas id="cPr"></canvas></div></div></div>
+
+  <div class="ct" id="s-calculator"><div class="cd" id="calCard">
+    <div class="cdh"><span class="cdt">🧮 Calculadora — Comparación Múltiple</span><div><button class="btng btn" onclick="addCR()">+ Fila</button> <button class="btn" onclick="exSec('calCard')">📄 PDF</button></div></div>
+    <p style="font-size:8px;color:var(--t2);margin-bottom:6px;">Agrega filas, selecciona combinaciones, edita Plots/Personas/Días. Todo se calcula automáticamente.</p>
+    <div style="overflow-x:auto;" id="calTbl"></div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Referencia: Cultivo × Actividad</span></div><div class="hml"><span>Bajo</span><div class="hmlb"></div><span>Alto</span></div><div style="overflow-x:auto;" id="rRef"></div></div></div>
+
+  <div class="ct" id="s-adddata"><div class="cd"><div class="cdh"><span class="cdt">➕ Agregar Registro</span></div>
+    <div class="frm">
+      <div class="clf"><label>Nombre</label><input type="text" id="fNom" list="dlN"><datalist id="dlN"></datalist></div>
+      <div class="clf"><label>Set</label><select id="fSet"></select></div>
+      <div class="clf"><label>Job</label><input type="text" id="fJob" list="dlJ"><datalist id="dlJ"></datalist></div>
+      <div class="clf"><label>Sub Actividad</label><input type="text" id="fSub" list="dlSu"><datalist id="dlSu"></datalist></div>
+      <div class="clf"><label>Cultivo</label><select id="fCul"></select></div>
+      <div class="clf"><label>MTC</label><input type="text" id="fMtc" list="dlM"><datalist id="dlM"></datalist></div>
+      <div class="clf"><label>Plots</label><input type="number" id="fPl" placeholder="50"></div>
+      <div class="clf"><label>Fecha</label><input type="date" id="fFe"></div>
+      <div class="clf"><label>Hora Inicio</label><input type="time" id="fHI" value="07:00"></div>
+      <div class="clf"><label>Hora Fin</label><input type="time" id="fHF" value="12:00"></div>
+      <div class="clf" style="display:flex;gap:5px;align-items:end;grid-column:span 2;"><button class="btng btn" style="padding:7px 18px;" onclick="addRec()">✅ Agregar</button><span id="fMsg" style="font-size:10px;color:var(--g);font-weight:600;"></span></div>
+    </div></div>
+    <div class="cd"><div class="cdh"><span class="cdt">Últimos registros</span></div><div style="overflow-x:auto;max-height:240px;"><table><thead><tr><th>Nombre</th><th>Set</th><th>Job</th><th>Cultivo</th><th>MTC</th><th>Plots</th><th>Hora</th></tr></thead><tbody id="addR"></tbody></table></div></div></div>
+</div>
+</div>
+
+<script>
+let PD=[],CH={},SRC='';
+const CL=['#88BC30','#38B4E8','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#06B6D4','#84CC16'];
+Chart.defaults.color='#94A3B8';Chart.defaults.font.family="'Plus Jakarta Sans',sans-serif";Chart.defaults.font.size=9;
+Chart.defaults.plugins.legend.labels.usePointStyle=true;Chart.defaults.elements.bar.borderRadius=3;
+Chart.defaults.scale.grid={color:'#E2E8F0',drawBorder:false};
+
+// Fallback file upload
+const fbD=document.getElementById('fbD'),fbI=document.getElementById('fbI');
+fbD.onclick=()=>fbI.click();fbI.onchange=e=>{if(e.target.files.length)readF(e.target.files[0]);};
+
+// Navigation
+document.querySelectorAll('.sbi').forEach(i=>{i.onclick=()=>{
+  document.querySelectorAll('.sbi').forEach(x=>x.classList.remove('on'));i.classList.add('on');
+  const t=i.dataset.t;document.querySelectorAll('.ct').forEach(c=>c.classList.remove('on'));document.getElementById('s-'+t).classList.add('on');
+  document.getElementById('pT').textContent={overview:'Vista General',ranking:'Ranking',compare:'Comparativo',heatmap:'Heatmaps',summary:'Tabla Resumen',projections:'Proyecciones',calculator:'Calculadora',adddata:'Agregar Registro'}[t]||'';
+  const d=gF();
+  if(t==='compare'){rSets(d);rMtcC(d);rHrs(d);rCuC(d);}
+  if(t==='heatmap'){rHWA(d);rHMA(d);rHCS(d);}
+  if(t==='summary')rSum(d);
+  if(t==='proj
