@@ -1,0 +1,20 @@
+If(
+    IsBlank(GPD_3.Selected);
+    Notify("⚠️ Por favor selecciona un registro de la lista."; NotificationType.Error);
+    
+    IsBlank(Combobox2_1.Selected.Value);
+    Notify("⚠️ Por favor selecciona un ESTADO."; NotificationType.Error);
+    
+    // Si hay un ítem seleccionado y un estado válido, procede a actualizar
+    Patch(
+        'Solicitud de siembras';
+        LookUp('Solicitud de siembras'; ID = GPD_3.Selected.ID);
+        {
+            ESTADO: { Value: Combobox2_1.Selected.Value }
+        };
+        If(Combobox2_1.Selected.Value = "EN PREPARACION"; { PREPARACION: Now() }; {});
+        If(Combobox2_1.Selected.Value = "FINALIZADO"; { LISTO: Now() }; {});
+        If(Combobox2_1.Selected.Value = "ENTREGADO"; { 'ENTREGA ETIQUETA': Now() }; {})
+    );;
+    Notify("✅ Información actualizada correctamente."; NotificationType.Success)
+)
