@@ -1,0 +1,23 @@
+If(
+    IsEmpty(Gallery1_1.AllItems);
+    Notify("⚠️ La lista está vacía."; NotificationType.Error);
+    CountRows(Filter(Gallery1_1.AllItems; IsBlank(Combobox2.Selected.Value))) > 0;
+    Notify("⚠️ Todos los registros deben tener un ESTADO seleccionado."; NotificationType.Error);
+    Set(varProcesando; true);;
+    ForAll(
+        Gallery1_1.AllItems As RegistroGaleria; // 1. Asignamos el alias "RegistroGaleria"
+        Patch(
+            'Solicitud de siembras';
+            LookUp('Solicitud de siembras'; ID = RegistroGaleria.ID); // 2. Usamos el alias explícito aquí
+            {
+                ESTADO: { Value: Combobox2.Selected.Value }
+            };
+            If(Combobox2.Selected.Value = "EN PREPARACION"; { PREPARACION: Now() }; {});
+            If(Combobox2.Selected.Value = "FINALIZADO"; { LISTO: Now() }; {});
+            If(Combobox2.Selected.Value = "ENTREGADO"; { 'ENTREGA ETIQUETA': Now() }; {})
+        )
+    );;
+    Set(varProcesando; false);;
+    Clear(colCarritoConfirmacion);;
+    Notify("✅ Información actualizada correctamente."; NotificationType.Success)
+)
